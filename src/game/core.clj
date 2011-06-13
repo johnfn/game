@@ -1,9 +1,14 @@
-(set! *warn-on-reflection* true)
+(ns game.test.core
+  (:require [src.game.test]))
+
+;(set! *warn-on-reflection* true)
 
 (import java.awt.Dimension)
 (import java.awt.event.KeyListener)
 (import javax.swing.JPanel)
 (import javax.swing.JFrame)
+
+(def *DEBUG* true)
 
 (def *width* 200)
 (def *height* 200)
@@ -13,6 +18,8 @@
 
 (def x (atom 0))
 (def y (atom 0))
+
+(def keys-down (map (fn [x] (atom 0)) (range 255)))
 
 (def simple-map
   (str
@@ -35,11 +42,13 @@
 
 (def *characters* {"You" [4 4]})
 
-(defn change-x-y [list]
-  (if (not (= (nth list 0) 0))
-    (swap! x + (nth list 0)))
-  (if (not (= (nth list 1) 0))
-    (swap! y + (nth list 1))))
+(defmacro debug-do [& body]
+  (when *DEBUG*
+    `(do ~@body)))
+
+(defn get-keys-down [keys-down]
+  ;Map all 1s to their position in the list, then filter out all 0s. Yay functional!
+  (filter (fn [x] (not (= 0 x))) (for [x (range 255)] (if (= @(nth keys-down x) 0) 0 x))))
 
 "87 W
  65 A
@@ -50,20 +59,15 @@
     (getPreferredSize [] (Dimension. 100 100))
     (keyPressed [e]
       (let [key-code (.getKeyCode e)]
-        (change-x-y (cond
-          (= key-code 87) '( 0 -1)   ;W
-          (= key-code 65) '(-1  0)   ;A
-          (= key-code 83) '( 0  1)   ;S
-          (= key-code 68) '( 1  0)))
-        (println x y) 
-        ));D
-    (keyReleased [e])
+        (reset! (nth keys-down key-code) 1)))
+    (keyReleased [e] 
+      (let [key-code (.getKeyCode e)]
+        (reset! (nth keys-down key-code) 0)))
     (keyTyped [e])))
 
 (doto panel
   (.setFocusable true)
   (.addKeyListener panel))
-
 
 (defn get-tile-type [tile]
   (let [type (cond
@@ -76,20 +80,15 @@
 (defn get-tile-data [x y]
   (nth simple-map (+ (* y *map-width*) x)))
 
+(test-fn get-tile-data 
+  '(1 1) \0
+  '(1 2) \1
+)
+
 (defn rel-to-abs [x y]
-  "Take (1 2) and adjust them by *tile-width*. Also moves according to title bar."
+  "Take (1 2) and returns the absolute position of that tile." 
   [(* x *tile-width*)
    (+ 30 (* y *tile-width*))])
-
-(defn make-frame [w h]
-  (def frame (java.awt.Frame.))
-
-  (.setVisible frame true)
-  (.setSize frame w h)
-  (.add frame panel)
-  (.pack frame)
-  ;(.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
-  frame)
 
 (defn draw-tile [gfx x y type]
   (let [[tile-x tile-y] (rel-to-abs x y)]
@@ -103,27 +102,39 @@
 
 (defn draw-characters [gfx window]
   (doseq [key (keys *characters*)]
-    ;(let [[x y] (get *characters* key)]
-      (draw-tile gfx @x @y (get-tile-type \c))))
+    (draw-tile gfx @x @y (get-tile-type \c))))
 
 (defn draw-state [gfx window]
   (let [image (.createImage window *width* *height*)
         off-gfx (.createGraphics image)]
     (draw-tiles off-gfx)
     (draw-characters off-gfx window)
-    
     (.drawImage gfx image 0 0 window)))
+
+(defn make-frame [w h]
+  (def frame (java.awt.Frame.))
+
+  (.setVisible frame true)
+  (.setSize frame w h)
+  (.add frame panel)
+  (.pack frame)
+  ;(.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
+  frame)
+
+(defn game-step [keys-down]
+  )
 
 (defn game-loop [frame]
   (let [gfx (.getGraphics frame)]
     (Thread/sleep *delay*)
+    (game-step (get-keys-down keys-down))
     (draw-state gfx frame)
     (recur frame)))
 
+(defn run-tests [x]
+  (println "Testing..."))
+
 (defn main []
-  (let [w *width*
-        h *height*
-        frame (make-frame w h)]
-    (game-loop frame)))
+  (game-loop (make-frame *width* *height*)))
 
 (main)
