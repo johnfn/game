@@ -11,8 +11,8 @@
 (def *tile-width* 16)
 (def *map-width* 16)
 
-(def x (ref 0))
-(def y (ref 0))
+(def x (atom 0))
+(def y (atom 0))
 
 (def simple-map
   (str
@@ -35,12 +35,28 @@
 
 (def *characters* {"You" [4 4]})
 
+(defn change-x-y [list]
+  (if (not (= (nth list 0) 0))
+    (swap! x + (nth list 0)))
+  (if (not (= (nth list 1) 0))
+    (swap! y + (nth list 1))))
+
+"87 W
+ 65 A
+ 83 S
+ 68 D"
 (def panel
   (proxy [JPanel KeyListener] []
     (getPreferredSize [] (Dimension. 100 100))
     (keyPressed [e]
-      (let [keyCode (.getKeyCode e)]
-        (println keyCode)))
+      (let [key-code (.getKeyCode e)]
+        (change-x-y (cond
+          (= key-code 87) '( 0 -1)   ;W
+          (= key-code 65) '(-1  0)   ;A
+          (= key-code 83) '( 0  1)   ;S
+          (= key-code 68) '( 1  0)))
+        (println x y) 
+        ));D
     (keyReleased [e])
     (keyTyped [e])))
 
@@ -87,8 +103,8 @@
 
 (defn draw-characters [gfx window]
   (doseq [key (keys *characters*)]
-    (let [[x y] (get *characters* key)]
-      (draw-tile gfx x y (get-tile-type \c)))))
+    ;(let [[x y] (get *characters* key)]
+      (draw-tile gfx @x @y (get-tile-type \c))))
 
 (defn draw-state [gfx window]
   (let [image (.createImage window *width* *height*)
