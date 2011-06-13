@@ -81,14 +81,16 @@
   (nth simple-map (+ (* y *map-width*) x)))
 
 (test-fn get-tile-data 
-  '(1 1) \0
-  '(1 2) \1
-)
+         '(1 1) \0
+         '(1 2) \1)
 
 (defn rel-to-abs [x y]
   "Take (1 2) and returns the absolute position of that tile." 
   [(* x *tile-width*)
    (+ 30 (* y *tile-width*))])
+
+(test-fn rel-to-abs
+         '(0 0) '(0 30))
 
 (defn draw-tile [gfx x y type]
   (let [[tile-x tile-y] (rel-to-abs x y)]
