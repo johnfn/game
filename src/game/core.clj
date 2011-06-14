@@ -27,6 +27,41 @@
 
 (def keys-down (map (fn [x] (atom 0)) (range 255)))
 
+(def simple-map-2
+(str
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000010101010101000000000000000"
+"000010100000000000000000000000"
+"000010101111111111110000000000"
+"000010100000000000000000000000"
+"000010100000000011111111111000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000010100000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+))
+
+
 (def simple-map
 (str
 "000000000000000000000000000000"
@@ -155,11 +190,6 @@
          )
 
 
-
-"87 W
- 65 A
- 83 S
- 68 D"
 (defn get-delta [keys-down]
   (let [W 87
         A 65
@@ -181,14 +211,12 @@
 
 (defn valid-position? [pos]
   ;Check all (up to 4) positions for validity.
-  (if (offscreen? pos) 
-    false
-    (reduce (fn [x y] (and x y)) ;Ensure that each of them are valid.
-      (let [positions (apply abs-to-rel pos)]
-        (map 
-           (fn [x] 
-             (not (= (get-tile-data (nth x 0) (nth x 1)) \1))) 
-           positions)))))
+  (reduce (fn [x y] (and x y)) ;Ensure that each of them are valid.
+    (let [positions (apply abs-to-rel pos)]
+      (map 
+         (fn [x] 
+           (not (= (get-tile-data (nth x 0) (nth x 1)) \1))) 
+         positions))))
 
 ;TODO: Actual implementation of this fn.
 (defn add-whats-necessary [pos]
@@ -196,16 +224,44 @@
     (reset! x (+ @x new-x))
     (reset! y (+ @y new-y))))
 
-(defn game-step [keys-down]
+
+(defn change-map [keys-down state]
+  "Changes the map if necessary (going offscreen on one side goes on the other side of another). 
+  Returns game state."
+
   (let [[dx dy] (get-delta keys-down)
         char-pos [@x @y]
-        vect-x [dx 0]
-        vect-y [0 dy]]
+        vect-xy [dx dy]
+        new-pos (+list char-pos vect-xy)
+        new-pos-x (first new-pos)
+        new-pos-y (second new-pos)]
+    (if (offscreen? new-pos)
+        (let [cur-map (get state :cur-map)]
+          (when (< new-pos-x 0)
+            (add-whats-necessary [*abs-map-width* 0]) 
+            (assoc state :cur-map simple-map-2)));change current map (return changed map)
+      state)))
+
+(defn move-char [keys-down state]
+  "Moves the character if necessary. Returns the game state. Does not worry about going offscreen.
+  Does not actually change game state at this point, although in the future it should (w/r/t x, y)."
+
+  (let [[dx dy] (get-delta keys-down)
+        char-pos [@x @y]
+        vect-x  [dx  0]
+        vect-y  [0  dy]]
     (when (valid-position? (+list vect-x char-pos))
-      (add-whats-necessary vect-x))
+        (add-whats-necessary vect-x))
     (let [char-pos [@x @y]] ;need to rebind because x may have changed.
       (when (valid-position? (+list vect-y char-pos))
-        (add-whats-necessary vect-y)))))
+        (add-whats-necessary vect-y)))
+    state))
+
+(defn game-step [keys-down state]
+  ;each of these can do something with state
+  (let [state (change-map keys-down state)
+        state (move-char keys-down state)]
+    state)) ;return game state
 
 ;
 ; Graphics
@@ -258,19 +314,18 @@
     (draw-characters off-gfx window)
     (.drawImage gfx image 0 0 window)))
 
-(defn game-loop [frame]
+(defn game-loop [frame state]
   (let [gfx (.getGraphics frame)]
     (Thread/sleep *delay*)
-    (game-step (get-keys-down keys-down))
-    (time (draw-state gfx frame))
-    (recur frame)))
+    (draw-state gfx frame)
+    (let [new-state (game-step (get-keys-down keys-down) state)]
+      (recur frame new-state))))
 
 (defn run-tests [x]
   (println "Testing..."))
 
 (defn make-frame [w h]
   (def frame (javax.swing.JFrame.))
-
   (.setVisible frame true)
   (.setSize frame w h)
   (.add frame panel)
@@ -279,8 +334,8 @@
   frame)
 
 (defn main []
-  ;Run game-loop in a separate thread so that repl works.
-  (do (game-loop (make-frame *width* *height*))))
-
+  ;Switch do with future to run game-loop in a separate thread. This makes the repl work. Neat!
+  (do (game-loop (make-frame *width* *height*)
+                 (hash-map :cur-map simple-map))))
 
 (main)
