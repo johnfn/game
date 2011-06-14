@@ -13,14 +13,17 @@
 
 (def *DEBUG* true)
 
+(def *speed* 4)
 (def *width* 200)
 (def *height* 200)
-(def *delay* 100)
+(def *delay* 5)
 (def *tile-width* 16)
+(def *player-width* 12)
 (def *map-width* 16)
+(def *abs-map-width* (* *map-width* *tile-width*))
 
 (def x (atom 0))
-(def y (atom 0))
+(def y (atom 30))
 
 (def running (atom true))
 
@@ -30,12 +33,12 @@
   (str
     "0000000000000000"
     "0000000000000000"
-    "0111111111111100"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
+    "0001111111111100"
+    "0001000000000000"
+    "0001000000000000"
+    "0001000000000000"
+    "0001000000000000"
+    "0001000000000000"
     "0000000000000000"
     "0000000000000000"
     "0000000000000000"
@@ -46,6 +49,9 @@
     "0000000000000000"))
 
 (def *characters* {"You" [4 4]})
+
+;TODO: better is dbg such that you just put it in the beginning of any form you want to debug and it works by applying.
+(defmacro dbg[x] `(let [x# ~x] (println "dbg:" '~x "=" x#) x#))
 
 (defmacro debug-do [& body]
   (when *DEBUG*
@@ -73,14 +79,6 @@
   (.setFocusable true)
   (.addKeyListener panel))
 
-(defn get-tile-type [tile]
-  (let [type (cond
-               (= tile \0) `(255 255 255)
-               (= tile \1) `(255 0 0)
-               (= tile \c) `(0 0 255)
-              )]
-    (java.awt.Color. (nth type 0) (nth type 1) (nth type 2))))
-
 (defn get-tile-data [x y]
   (nth simple-map (+ (* y *map-width*) x)))
 
@@ -88,12 +86,25 @@
          '(1 1) \0
          '(1 2) \1)
 
+(defn abs-to-abs [x y]
+  "Take an absolute position and put it in the correct place (away from title bar). I really need to think of a better fn name."
+  [x (+ y 30)])
+
 (defn rel-to-abs [x y]
   "Take (1 2) and returns the absolute position of that tile." 
   [(* x *tile-width*)
-   (+ 30 (* y *tile-width*))])
+   (* y *tile-width*)])
 
-(test-fn rel-to-abs
+(defn abs-to-rel [x y]
+  (for [i (list x (+ x *player-width*))
+        j (list y (+ y *player-width*))]
+    [(int (/ i *tile-width*))
+     (int (/ (- j 30) *tile-width*))]))
+
+(defn rel-to-pos [x y]
+  (apply abs-to-abs (rel-to-abs x y)))
+
+(test-fn rel-to-pos
          '(0 0) '(0 30))
 
 (defn in? [list item]
@@ -124,15 +135,30 @@
         A 65
         S 83
         D 68
-        dy (+ (when (in? keys-down W) -1)
-              (when (in? keys-down S)  1))
-        dx (+ (when (in? keys-down D)  1)
-              (when (in? keys-down A) -1))]
+        dy (+ (when (in? keys-down W) (- *speed*))
+              (when (in? keys-down S)  *speed*))
+        dx (+ (when (in? keys-down D)  *speed*)
+              (when (in? keys-down A) (- *speed*)))]
     (list dx dy)))
 
+(defn offscreen? [pos]
+  (let [x (nth pos 0)
+        y (nth pos 1)]
+    (or (< x 0)
+        (> x *abs-map-width*)
+        (< y 30)
+        (> y *abs-map-width*))))
+
 (defn valid-position? [pos]
-  (let [[pos-x pos-y] pos]
-    (not (= (get-tile-data pos-x pos-y) \1))))
+  ;Check all (up to 4) positions for validity.
+  (if (offscreen? pos) 
+    false
+    (reduce (fn [x y] (and x y)) ;Ensure that each of them are valid.
+      (let [positions (apply abs-to-rel pos)]
+        (map 
+           (fn [x] 
+             (not (= (get-tile-data (nth x 0) (nth x 1)) \1))) 
+           positions)))))
 
 ;TODO: Actual implementation of this fn.
 (defn set-whats-necessary [pos]
@@ -143,19 +169,32 @@
 (defn game-step [keys-down]
   (let [delta (get-delta keys-down)
         new-pos (+list delta (list @x @y))]
-    (when (valid-position? new-pos)
+    (when (dbg (valid-position? new-pos))
       (set-whats-necessary new-pos))))
 
 ;
 ; Graphics
 ;
 
+(defn get-tile-type [tile]
+  (let [type (cond
+               (= tile \0) `(255 255 255)
+               (= tile \1) `(255 0 0)
+               (= tile \c) `(0 0 255)
+              )]
+    (java.awt.Color. (nth type 0) (nth type 1) (nth type 2))))
+
+
+(defn draw-abs [gfx x y type]
+  "Draws an absolutely positioned tile"
+  (.setColor gfx type)
+  (.fillRect gfx x y *tile-width* *tile-width*))
 
 (defn draw-tile [gfx x y type]
   "Draws an individual tile."
-  (let [[tile-x tile-y] (rel-to-abs x y)]
-    (.setColor gfx type)
-    (.fillRect gfx tile-x tile-y *tile-width* *tile-width*)))
+  (let [[tile-x tile-y] (rel-to-pos x y)]
+    (draw-abs gfx tile-x tile-y type)))
+
 
 (defn draw-tiles [gfx]
   "Draw all tiles."
@@ -166,7 +205,7 @@
 (defn draw-characters [gfx window]
   "Draw all characters."
   (doseq [key (keys *characters*)]
-    (draw-tile gfx @x @y (get-tile-type \c))))
+    (draw-abs gfx @x @y (get-tile-type \c))))
 
 (defn draw-state [gfx window]
   "The top level drawing function."
