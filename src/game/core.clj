@@ -19,34 +19,48 @@
 (def *delay* 5)
 (def *tile-width* 16)
 (def *player-width* 12)
-(def *map-width* 16)
+(def *map-width* 30)
 (def *abs-map-width* (* *map-width* *tile-width*))
 
-(def x (atom 0))
+(def x (atom 30))
 (def y (atom 30))
-
-(def running (atom true))
 
 (def keys-down (map (fn [x] (atom 0)) (range 255)))
 
 (def simple-map
-  (str
-    "0000000000000000"
-    "0000000000000000"
-    "0001111111111100"
-    "0001000000000000"
-    "0001000000000000"
-    "0001000000000000"
-    "0001000000000000"
-    "0001000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"
-    "0000000000000000"))
+(str
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000101010101000000000000000"
+"000000000000000000000000000000"
+"000000001111111111110000000000"
+"000000000000000000000000000000"
+"000000000000000011111111111000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+"000000000000000000000000000000"
+))
+
 
 (def *characters* {"You" [4 4]})
 
@@ -64,9 +78,29 @@
   ;Map all 1s to their position in the list, then filter out all 0s. Yay functional!
   (filter (fn [x] (not (= 0 x))) (for [x (range 255)] (if (= @(nth keys-down x) 0) 0 x))))
 
+(defn +list [& lists]
+  (let [len (count (nth lists 0))]
+    (map 
+      (fn [x] ;for each position
+        (apply +  ;sum
+               (map (fn [list] ; each element of each list
+                      (nth list x)) ;that's at that position
+                    lists))) 
+      (range len))))
+
+;(defn +list [a b]
+;  (for [x (range (count a))]
+;    (+ (nth a x) (nth b x))))
+
+(test-fn +list
+         '((1 2 3) (2 3 4)) '(3 5 7)
+         '((1 2) (2 3) (3 4)) '(6 9)
+         '((1) (5)) '(6)
+         )
+
 (def panel
   (proxy [JPanel KeyListener] []
-    (getPreferredSize [] (Dimension. 100 100))
+    (getPreferredSize [] (Dimension. *width* *height*))
     (keyPressed [e]
       (let [key-code (.getKeyCode e)]
         (reset! (nth keys-down key-code) 1)))
@@ -86,20 +120,24 @@
          '(1 1) \0
          '(1 2) \1)
 
-(defn abs-to-abs [x y]
-  "Take an absolute position and put it in the correct place (away from title bar). I really need to think of a better fn name."
-  [x (+ y 30)])
+(defn abs-to-abs [x-pos y-pos]
+  "Take an absolute position and put it in the correct place. I really need to think of a better fn name."
+  (let [x-offs @x
+        y-offs @y]
+    (+list
+      [(+ (- x-offs) 50) (+ (- y-offs) 50)] ;adjust for moving map
+      [0 30] ;adjust for title bar
+      [x-pos y-pos])))
 
-(defn rel-to-abs [x y]
+(defn rel-to-abs [x-pos y-pos]
   "Take (1 2) and returns the absolute position of that tile." 
-  [(* x *tile-width*)
-   (* y *tile-width*)])
+  [(* x-pos *tile-width*) (* y-pos *tile-width*)])
 
 (defn abs-to-rel [x y]
   (for [i (list x (+ x *player-width*))
         j (list y (+ y *player-width*))]
     [(int (/ i *tile-width*))
-     (int (/ (- j 30) *tile-width*))]))
+     (int (/ j *tile-width*))]))
 
 (defn rel-to-pos [x y]
   (apply abs-to-abs (rel-to-abs x y)))
@@ -116,14 +154,6 @@
          '((1 2 3 4 6) 5) nil
          )
 
-(defn +list [a b]
-  (for [x (range (count a))]
-    (+ (nth a x) (nth b x))))
-
-(test-fn +list
-         '((1 2 3) (2 3 4)) '(3 5 7)
-         '((1) (5)) '(6)
-         )
 
 
 "87 W
@@ -136,8 +166,8 @@
         S 83
         D 68
         dy (+ (when (in? keys-down W) (- *speed*))
-              (when (in? keys-down S)  *speed*))
-        dx (+ (when (in? keys-down D)  *speed*)
+              (when (in? keys-down S)    *speed*))
+        dx (+ (when (in? keys-down D)    *speed*)
               (when (in? keys-down A) (- *speed*)))]
     (list dx dy)))
 
@@ -146,7 +176,7 @@
         y (nth pos 1)]
     (or (< x 0)
         (> x *abs-map-width*)
-        (< y 30)
+        (< y 0)
         (> y *abs-map-width*))))
 
 (defn valid-position? [pos]
@@ -162,7 +192,6 @@
 
 ;TODO: Actual implementation of this fn.
 (defn add-whats-necessary [pos]
-  (println pos)
   (let [[new-x new-y] pos]
     (reset! x (+ @x new-x))
     (reset! y (+ @y new-y))))
@@ -175,8 +204,7 @@
     (when (valid-position? (+list vect-x char-pos))
       (add-whats-necessary vect-x))
     (when (valid-position? (+list vect-y char-pos))
-      (add-whats-necessary vect-y))
-    ))
+      (add-whats-necessary vect-y))))
 
 ;
 ; Graphics
@@ -196,10 +224,17 @@
   (.setColor gfx type)
   (.fillRect gfx x y *tile-width* *tile-width*))
 
+(defn visible-abs? [x y]
+  (and (> x (- *tile-width*))
+       (< x *abs-map-width*)
+       (> y (- *tile-width*))
+       (< y *abs-map-width*)))
+
 (defn draw-tile [gfx x y type]
   "Draws an individual tile."
   (let [[tile-x tile-y] (rel-to-pos x y)]
-    (draw-abs gfx tile-x tile-y type)))
+    (when (visible-abs? tile-x tile-y)
+      (draw-abs gfx tile-x tile-y type))))
 
 
 (defn draw-tiles [gfx]
@@ -211,7 +246,8 @@
 (defn draw-characters [gfx window]
   "Draw all characters."
   (doseq [key (keys *characters*)]
-    (draw-abs gfx @x @y (get-tile-type \c))))
+    (let [[x y] (abs-to-abs @x @y)]
+      (draw-abs gfx x y (get-tile-type \c)))))
 
 (defn draw-state [gfx window]
   "The top level drawing function."
@@ -220,6 +256,16 @@
     (draw-tiles off-gfx)
     (draw-characters off-gfx window)
     (.drawImage gfx image 0 0 window)))
+
+(defn game-loop [frame]
+  (let [gfx (.getGraphics frame)]
+    (Thread/sleep *delay*)
+    (game-step (get-keys-down keys-down))
+    (time (draw-state gfx frame))
+    (recur frame)))
+
+(defn run-tests [x]
+  (println "Testing..."))
 
 (defn make-frame [w h]
   (def frame (javax.swing.JFrame.))
@@ -230,16 +276,6 @@
   (.pack frame)
   (.setDefaultCloseOperation frame JFrame/EXIT_ON_CLOSE)
   frame)
-
-(defn game-loop [frame]
-  (let [gfx (.getGraphics frame)]
-    (Thread/sleep *delay*)
-    (game-step (get-keys-down keys-down))
-    (draw-state gfx frame)
-      (recur frame)))
-
-(defn run-tests [x]
-  (println "Testing..."))
 
 (defn main []
   ;Run game-loop in a separate thread so that repl works.

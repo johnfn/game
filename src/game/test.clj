@@ -11,9 +11,11 @@
   (defn test-body 
     ; run a test
     ([passed total & more]
-      (let [passed? (= (apply fn (first more)) (second more))
+      (let [result (apply fn (first more))
+            expected (second more)
+            passed? (= result expected)
             new-passed (if passed? (+ passed 1) passed)]
-        (when-not passed? (print "-"))
+        (when-not passed? (println "Got:" result ", expected:" expected))
         (apply test-body (list* new-passed (+ total 1) (next (next more))))))
 
     ; done; print out statistics
