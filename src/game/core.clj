@@ -161,16 +161,22 @@
            positions)))))
 
 ;TODO: Actual implementation of this fn.
-(defn set-whats-necessary [pos]
+(defn add-whats-necessary [pos]
+  (println pos)
   (let [[new-x new-y] pos]
-    (reset! x new-x)
-    (reset! y new-y)))
+    (reset! x (+ @x new-x))
+    (reset! y (+ @y new-y))))
 
 (defn game-step [keys-down]
-  (let [delta (get-delta keys-down)
-        new-pos (+list delta (list @x @y))]
-    (when (dbg (valid-position? new-pos))
-      (set-whats-necessary new-pos))))
+  (let [[dx dy] (get-delta keys-down)
+        char-pos [@x @y]
+        vect-x [dx 0]
+        vect-y [0 dy]]
+    (when (valid-position? (+list vect-x char-pos))
+      (add-whats-necessary vect-x))
+    (when (valid-position? (+list vect-y char-pos))
+      (add-whats-necessary vect-y))
+    ))
 
 ;
 ; Graphics
