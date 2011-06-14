@@ -203,8 +203,9 @@
         vect-y [0 dy]]
     (when (valid-position? (+list vect-x char-pos))
       (add-whats-necessary vect-x))
-    (when (valid-position? (+list vect-y char-pos))
-      (add-whats-necessary vect-y))))
+    (let [char-pos [@x @y]] ;need to rebind because x may have changed.
+      (when (valid-position? (+list vect-y char-pos))
+        (add-whats-necessary vect-y)))))
 
 ;
 ; Graphics
