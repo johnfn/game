@@ -96,7 +96,6 @@
 "000000000000000000000000000000"
 ))
 
-
 (def *characters* {"You" [4 4]})
 
 ;TODO: better is dbg such that you just put it in the beginning of any form you want to debug and it works by applying.
@@ -207,7 +206,7 @@
     (or (< x 0)
         (> x *abs-map-width*)
         (< y 0)
-        (> y *abs-map-width*))))
+        (> y (- *abs-map-width* *tile-width*)))))
 
 (defn valid-position? [pos]
   ;Check all (up to 4) positions for validity.
@@ -224,23 +223,40 @@
     (reset! x (+ @x new-x))
     (reset! y (+ @y new-y))))
 
+;This is just an idea (untested code)
+(defmacro try-all [x y & body]
+  "Runs body on all 4 points around the square with top left corner (x, y)"
+  `(doseq [pos-x (list ~x (+ ~x *tile-width*))
+           pos-y (list ~y (+ ~y *tile-width*))]
+     (do ~@body)))
+
 
 (defn change-map [keys-down state]
   "Changes the map if necessary (going offscreen on one side goes on the other side of another). 
   Returns game state."
 
   (let [[dx dy] (get-delta keys-down)
-        char-pos [@x @y]
-        vect-xy [dx dy]
-        new-pos (+list char-pos vect-xy)
-        new-pos-x (first new-pos)
-        new-pos-y (second new-pos)]
-    (if (offscreen? new-pos)
-        (let [cur-map (get state :cur-map)]
-          (when (< new-pos-x 0)
-            (add-whats-necessary [*abs-map-width* 0]) 
-            (assoc state :cur-map simple-map-2)));change current map (return changed map)
-      state)))
+        x (+ @x dx)
+        y (+ @y dy)
+        cur-map (get state :cur-map)]
+      (cond 
+        (< x 0)
+          (do
+            (add-whats-necessary [(- *abs-map-width* 16) 0]) 
+            (assoc state :cur-map simple-map-2))
+        (> (+ x *player-width*) *abs-map-width*)
+          (do
+            (add-whats-necessary [(- (- *abs-map-width* 16)) 0]) 
+            (assoc state :cur-map simple-map-2))
+        (< y 0)
+          (do
+            (add-whats-necessary [0 (- *abs-map-width* 16)]) 
+            (assoc state :cur-map simple-map-2))
+        (> (+ y *player-width*) *abs-map-width*)
+          (do
+            (add-whats-necessary [0 (- (- *abs-map-width* 16))]) 
+            (assoc state :cur-map simple-map-2))
+        :else state)))
 
 (defn move-char [keys-down state]
   "Moves the character if necessary. Returns the game state. Does not worry about going offscreen.
